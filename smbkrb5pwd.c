@@ -280,8 +280,13 @@ static int krb5_set_passwd(
 			return LDAP_LOCAL_ERROR;
 		}
 
+		Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO,
+			"smbkrb5pwd %s: forked password change process returned %d", op->o_log_prefix, status);
+
 		return status;
 	}
+
+	Log1(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO, "smbkrb5pwd %s: forked child has started", op->o_log_prefix);
 
 	signal(SIGALRM, SIG_DFL);
 	alarm(15);
@@ -306,11 +311,14 @@ static int krb5_set_passwd(
 		goto finish;
 	}
 
-	user_uid = calloc(a_uid->a_vals[0].bv_len + 1, 1);
-        user_password = calloc(qpw->rs_new.bv_len + 1, 1);
+	Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO, "smbkrb5pwd %s: found %ld uids", op->o_log_prefix, sizeof a_uid->a_vals / sizeof *(a_uid->a_vals));
+	Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO, "smbkrb5pwd %s: found uid %s", op->o_log_prefix, a_uid->a_vals[0].bv_val);
 
-        memcpy(user_uid, a_uid->a_vals[0].bv_val, a_uid->a_vals[0].bv_len);
-        memcpy(user_password, qpw->rs_new.bv_val, qpw->rs_new.bv_len);
+	user_uid = calloc(a_uid->a_vals[0].bv_len + 1, 1);
+	user_password = calloc(qpw->rs_new.bv_len + 1, 1);
+
+	memcpy(user_uid, a_uid->a_vals[0].bv_val, a_uid->a_vals[0].bv_len);
+	memcpy(user_password, qpw->rs_new.bv_val, qpw->rs_new.bv_len);
 
 	retval = kadm5_init_krb5_context(&context);
 	if (retval) {
@@ -321,6 +329,7 @@ static int krb5_set_passwd(
 		rc = LDAP_CONNECT_ERROR;
 		goto finish;
 	}
+	Log1(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO, "smbkrb5pwd %s: past kadm5_init_krb5_context", op->o_log_prefix);
 
 	params.mask |= KADM5_CONFIG_REALM;
 	params.realm = pi->kerberos_realm;
@@ -340,7 +349,7 @@ static int krb5_set_passwd(
                                  KADM5_API_VERSION_3, NULL,
                                  &kadm5_handle);
 #endif
-
+	Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO, "smbkrb5pwd %s: retval from kadm5_init was %ld", op->o_log_prefix, retval);
 	if (retval) {
 		Log4(LDAP_DEBUG_ANY, LDAP_LEVEL_ERR,
 		      "smbkrb5pwd %s : kadm5_init_with_password() failed"
@@ -360,8 +369,10 @@ static int krb5_set_passwd(
 	}
 	snprintf(user_princstr, user_princstr_size, "%s@%s", user_uid,
 		 pi->kerberos_realm);
+	Log3(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO, "smbkrb5pwd %s: principal is %s@%s", op->o_log_prefix, user_princstr, pi->kerberos_realm);
 
 	retval = krb5_parse_name(context, user_princstr, &princ.principal);
+	Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO, "smbkrb5pwd %s: retval from krb5_parse_name was %ld", op->o_log_prefix, retval);
 	if (retval) {
 		Log3(LDAP_DEBUG_ANY, LDAP_LEVEL_ERR,
 		     "smbkrb5pwd %s : krb5_parse_name() failed"
@@ -375,6 +386,7 @@ static int krb5_set_passwd(
 	princ.attributes |= KRB5_KDB_REQUIRES_PRE_AUTH;
 	retval = kadm5_create_principal(kadm5_handle, &princ, create_mask,
 					user_password);
+	Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO, "smbkrb5pwd %s: retval from kadm5_create_principal was %ld", op->o_log_prefix, retval);
 	if (retval == KADM5_OK) {
 		Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_NOTICE,
 		     "smbkrb5pwd %s : created principal for user %s\n",
@@ -421,6 +433,8 @@ finish:
 
 	if (user_password)
 	  free(user_password);
+	
+	Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO, "smbkrb5pwd %s: returning with rc %ld", op->o_log_prefix, rc);
 
 	_exit(rc);
 }
@@ -746,6 +760,8 @@ smbkrb5pwd_cf_func( ConfigArgs *c )
 
 	case PC_SMB_ENABLE: {
 		slap_mask_t	mode = pi->mode, m;
+
+		Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_INFO, "%s: smbkrb5pwd: enabling %ld", c->log, mode);
 
 		rc = verbs_to_mask( c->argc, c->argv, smbkrb5pwd_modules, &m );
 		if ( rc > 0 ) {
