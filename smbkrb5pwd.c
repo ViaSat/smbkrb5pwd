@@ -305,6 +305,9 @@ static int krb5_set_passwd(
 		rc = LDAP_NO_SUCH_ATTRIBUTE;
 		goto finish;
 	}
+	Log1(LDAP_DEBUG_ANY, LDAP_LEVEL_ERR,
+	      "smbkrb5pwd %s : found uid in entry\n",
+	      op->o_log_prefix);
 
 	user_uid = calloc(a_uid->a_vals[0].bv_len + 1, 1);
         user_password = calloc(qpw->rs_new.bv_len + 1, 1);
@@ -321,11 +324,19 @@ static int krb5_set_passwd(
 		rc = LDAP_CONNECT_ERROR;
 		goto finish;
 	}
+	Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_ERR,
+	     "smbkrb5pwd %s : kadm5_init_krb5_context() worked"
+	     " for user %s\n",
+	     op->o_log_prefix, user_uid);
 
 	params.mask |= KADM5_CONFIG_REALM;
 	params.realm = pi->kerberos_realm;
 
 #ifdef SMBKRB5PWD_KADM5_SRV
+	Log3(LDAP_DEBUG_ANY, LDAP_LEVEL_ERR,
+	      "smbkrb5pwd %s : calling kadm5_init_with_password()"
+	      " for user %s (%s)\n",
+  	      op->o_log_prefix, user_uid, pi->admin_princstr);
 	retval = kadm5_init_with_password(context, pi->admin_princstr, NULL,
 					  NULL, &params,
 					  KADM5_STRUCT_VERSION,
@@ -334,6 +345,10 @@ static int krb5_set_passwd(
 #endif
 
 #ifdef SMBKRB5PWD_KADM5_CLNT
+	Log3(LDAP_DEBUG_ANY, LDAP_LEVEL_ERR,
+	      "smbkrb5pwd %s : calling kadm5_init_with_skey()"
+	      " for user %s (%s)\n",
+  	      op->o_log_prefix, user_uid, pi->admin_princstr);
         retval = kadm5_init_with_skey(context, pi->admin_princstr, KRB5_KEYTAB,
                                  KADM5_ADMIN_SERVICE, &params,
                                  KADM5_STRUCT_VERSION,
@@ -349,6 +364,10 @@ static int krb5_set_passwd(
 		rc = LDAP_CONNECT_ERROR;
 		goto mitkrb_error_with_context;
 	}
+	Log3(LDAP_DEBUG_ANY, LDAP_LEVEL_ERR,
+	      "smbkrb5pwd %s : kadm5_init_with_password() worked"
+	      " for user %s (%s)\n",
+  	      op->o_log_prefix, user_uid, pi->admin_princstr);
 
 	user_princstr_size = strlen(user_uid)
 			     + sizeof("@")
@@ -370,6 +389,10 @@ static int krb5_set_passwd(
 		rc = LDAP_CONNECT_ERROR;
 		goto mitkrb_error_with_user_princstr;
 	}
+	Log2(LDAP_DEBUG_ANY, LDAP_LEVEL_ERR,
+	     "smbkrb5pwd %s : krb5_parse_name() worked"
+	     " for user %s\n",
+	     op->o_log_prefix, user_princstr);
 
 	long create_mask = KADM5_PRINCIPAL|KADM5_MAX_LIFE|KADM5_ATTRIBUTES;
 	princ.attributes |= KRB5_KDB_REQUIRES_PRE_AUTH;
